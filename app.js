@@ -1,9 +1,22 @@
-here/* =========================================================================
-   المصمم العراقي — app.js
+/* =========================================================================
+   المصمم العراقي — app.js — VERSION-CHECK-2026-06-25-2
    ========================================================================= */
+(function showVersionBadge() {
+  const badge = document.createElement("div");
+  badge.textContent = "✅ نسخة الكود: V2 (إذا تشوف هذا فالتحديث وصل بنجاح)";
+  badge.style.cssText = "position:fixed;bottom:0;left:0;right:0;z-index:99998;background:#003300;color:#7CFC7C;padding:8px;font-size:11px;text-align:center;font-family:monospace;";
+  document.body.appendChild(badge);
+})();
 
-/* ---------- 0) TEMP DEBUG: show any JS error directly on screen ---------- */
+/* ---------- 0) TEMP DEBUG: version marker + error overlay ---------- */
 (function setupDebugOverlay() {
+  // علامة نسخة واضحة - تساعدنا نتأكد إن آخر تحديث نشر فعليًا على GitHub Pages
+  const versionBadge = document.createElement("div");
+  versionBadge.textContent = "نسخة تجريبية: DEBUG-V3";
+  versionBadge.style.cssText = "position:fixed;bottom:8px;left:8px;z-index:99999;background:#0a7d2c;color:#fff;padding:6px 12px;font-family:monospace;font-size:11px;border-radius:6px;opacity:0.9;";
+  document.addEventListener("DOMContentLoaded", () => document.body.appendChild(versionBadge));
+  if (document.body) document.body.appendChild(versionBadge);
+
   function showError(label, message) {
     let box = document.getElementById("debugErrorBox");
     if (!box) {

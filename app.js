@@ -91,6 +91,16 @@ function navigate(route) {
   window.scrollTo({ top: 0, behavior: "instant" });
 }
 function renderRoute() {
+  // توجيه فوري وآمن بين admin-login و admin (بدون setTimeout لتفادي أي تعارض توقيت)
+  if (state.route === "admin-login" && state.user && state.isAdmin) {
+    state.route = "admin";
+    history.replaceState(null, "", "#admin");
+  }
+  if (state.route === "admin" && !(state.user && state.isAdmin)) {
+    state.route = "admin-login";
+    history.replaceState(null, "", "#admin-login");
+  }
+
   $all(".nav-link").forEach(l => l.classList.toggle("active", l.dataset.route === state.route));
   const app = $("#app");
   app.innerHTML = "";
@@ -138,22 +148,20 @@ db.collection("settings").doc("general").onSnapshot((snap) => {
   state.settings = snap.exists ? snap.data() : { social: {} };
   renderAuthArea();
   renderFooterSocial();
-  if (state.route === "home" || state.route === "admin") renderRoute();
+  if (authReady && (state.route === "home" || state.route === "admin")) renderRoute();
   settingsReady = true; maybeHideLoader();
 }, (err) => { console.error(err); settingsReady = true; maybeHideLoader(); });
 
 /* Load home cards realtime */
 db.collection("cards").orderBy("order", "asc").onSnapshot((snap) => {
   state.cards = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  if (state.route === "home") renderRoute();
-  if (state.route === "admin") renderRoute();
+  if (authReady && (state.route === "home" || state.route === "admin")) renderRoute();
 }, (err) => console.error(err));
 
 /* Load pro cards realtime */
 db.collection("proCards").orderBy("order", "asc").onSnapshot((snap) => {
   state.proCards = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  if (state.route === "pro") renderRoute();
-  if (state.route === "admin") renderRoute();
+  if (authReady && (state.route === "pro" || state.route === "admin")) renderRoute();
 }, (err) => console.error(err));
 
 /* Auth state */
@@ -633,12 +641,6 @@ function renderProfilePage() {
    11) ADMIN LOGIN PAGE (secret route: #admin-login)
    ========================================================================= */
 function renderAdminLoginPage() {
-  // If already logged in as admin, go straight to dashboard
-  if (state.user && state.isAdmin) {
-    setTimeout(() => navigate("admin"), 0);
-    return el(`<div></div>`);
-  }
-
   const wrap = el(`
     <div class="container section" style="max-width:420px;">
       <div class="admin-card">
@@ -693,11 +695,6 @@ function renderAdminLoginPage() {
 let adminActivePanel = "cards"; // cards | proCards | codes | users | settings
 
 function renderAdminPage() {
-  if (!state.user || !state.isAdmin) {
-    setTimeout(() => navigate("admin-login"), 0);
-    return el(`<div></div>`);
-  }
-
   const wrap = el(`
     <div class="admin-shell">
       <aside class="admin-sidebar" id="adminSidebar">

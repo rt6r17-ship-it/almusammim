@@ -1,6 +1,34 @@
-/* =========================================================================
+here/* =========================================================================
    المصمم العراقي — app.js
    ========================================================================= */
+
+/* ---------- 0) TEMP DEBUG: show any JS error directly on screen ---------- */
+(function setupDebugOverlay() {
+  function showError(label, message) {
+    let box = document.getElementById("debugErrorBox");
+    if (!box) {
+      box = document.createElement("div");
+      box.id = "debugErrorBox";
+      box.style.cssText = "position:fixed;top:0;right:0;left:0;z-index:99999;background:#7a0000;color:#fff;padding:14px;font-family:monospace;font-size:12px;direction:ltr;text-align:left;white-space:pre-wrap;max-height:50vh;overflow:auto;border-bottom:3px solid #ff4444;";
+      document.body.appendChild(box);
+    }
+    const line = document.createElement("div");
+    line.style.marginBottom = "8px";
+    line.style.borderBottom = "1px solid rgba(255,255,255,0.3)";
+    line.style.paddingBottom = "8px";
+    line.textContent = "[" + label + "] " + message;
+    box.appendChild(line);
+  }
+  window.addEventListener("error", (e) => {
+    showError("JS Error", (e.message || "") + " — " + (e.filename || "") + ":" + (e.lineno || ""));
+  });
+  window.addEventListener("unhandledrejection", (e) => {
+    const reason = e.reason;
+    const msg = reason && reason.message ? reason.message : String(reason);
+    const code = reason && reason.code ? " (code: " + reason.code + ")" : "";
+    showError("Promise Error", msg + code);
+  });
+})();
 
 /* ---------- 1) Firebase Init ---------- */
 const firebaseConfig = {
@@ -22,6 +50,7 @@ const db = firebase.firestore();
 /* ---------- 2) Constants ---------- */
 const ADMIN_EMAIL = "admin@mtger.iq"; // فقط هذا الحساب يدخل لوحة التحكم
 const TELEGRAM_USERNAME = "th2f6";
+
 
 /* ---------- 3) Global State ---------- */
 const state = {
@@ -105,13 +134,26 @@ function renderRoute() {
   const app = $("#app");
   app.innerHTML = "";
 
-  switch (state.route) {
-    case "home": app.appendChild(renderHomePage()); break;
-    case "pro": app.appendChild(renderProPage()); break;
-    case "profile": app.appendChild(renderProfilePage()); break;
-    case "admin-login": app.appendChild(renderAdminLoginPage()); break;
-    case "admin": app.appendChild(renderAdminPage()); break;
-    default: app.appendChild(renderHomePage());
+  try {
+    switch (state.route) {
+      case "home": app.appendChild(renderHomePage()); break;
+      case "pro": app.appendChild(renderProPage()); break;
+      case "profile": app.appendChild(renderProfilePage()); break;
+      case "admin-login": app.appendChild(renderAdminLoginPage()); break;
+      case "admin": app.appendChild(renderAdminPage()); break;
+      default: app.appendChild(renderHomePage());
+    }
+  } catch (err) {
+    console.error("خطأ أثناء عرض الصفحة:", err);
+    app.appendChild(el(`
+      <div class="container section text-center">
+        <div class="empty-state">
+          <span class="icon">⚠️</span>
+          <strong>حدث خطأ غير متوقع</strong>
+          حاول تحديث الصفحة، أو تواصل مع الدعم إن استمرت المشكلة
+        </div>
+      </div>
+    `));
   }
 }
 
@@ -173,33 +215,39 @@ auth.onAuthStateChanged(async (user) => {
   if (user) {
     state.isAdmin = (user.email || "").toLowerCase() === ADMIN_EMAIL.toLowerCase();
 
-    // Ensure user profile doc exists
-    const ref = db.collection("users").doc(user.uid);
-    const snap = await ref.get();
-    if (!snap.exists) {
-      const newProfile = {
-        name: user.displayName || (user.email ? user.email.split("@")[0] : "مستخدم"),
-        email: user.email || "",
-        photoURL: user.photoURL || "",
-        username: "user" + user.uid.slice(0, 6),
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        proExpiresAt: null,
-      };
-      await ref.set(newProfile);
-      state.profile = { id: user.uid, ...newProfile };
-    } else {
-      state.profile = { id: user.uid, ...snap.data() };
-    }
-
-    // live-listen to own profile (for Pro status changes from admin)
-    state.unsub.forEach(u => u());
-    state.unsub = [ref.onSnapshot(s => {
-      if (s.exists) {
-        state.profile = { id: user.uid, ...s.data() };
-        renderAuthArea();
-        if (["profile", "pro"].includes(state.route)) renderRoute();
+    try {
+      // Ensure user profile doc exists
+      const ref = db.collection("users").doc(user.uid);
+      const snap = await ref.get();
+      if (!snap.exists) {
+        const newProfile = {
+          name: user.displayName || (user.email ? user.email.split("@")[0] : "مستخدم"),
+          email: user.email || "",
+          photoURL: user.photoURL || "",
+          username: "user" + user.uid.slice(0, 6),
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          proExpiresAt: null,
+        };
+        await ref.set(newProfile);
+        state.profile = { id: user.uid, ...newProfile };
+      } else {
+        state.profile = { id: user.uid, ...snap.data() };
       }
-    })];
+
+      // live-listen to own profile (for Pro status changes from admin)
+      state.unsub.forEach(u => u());
+      state.unsub = [ref.onSnapshot(s => {
+        if (s.exists) {
+          state.profile = { id: user.uid, ...s.data() };
+          renderAuthArea();
+          if (["profile", "pro"].includes(state.route)) renderRoute();
+        }
+      })];
+    } catch (err) {
+      console.error("تعذر تحميل/إنشاء ملف المستخدم:", err);
+      // نكمل التنفيذ حتى لو فشل تحميل البروفايل (مثلاً بسبب Security Rules)
+      // state.isAdmin تبقى صحيحة لأنها تعتمد فقط على البريد الإلكتروني، لا على Firestore
+    }
   } else {
     state.unsub.forEach(u => u());
     state.unsub = [];
